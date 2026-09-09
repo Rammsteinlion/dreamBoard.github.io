@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Mapa de Sueños Interactivo</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Patrick+Hand&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --ink: #2b241d;
+    --wood1: #70482f;
+    --wood2: #523420;
+    --pink: #efb7c9;
+    --blue: #b9d5e6;
+    --green: #b9d89d;
+    --yellow: #f1d37e;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--ink);
+    font-family: 'Patrick Hand', cursive, sans-serif;
+    background:
+      radial-gradient(circle at 15% 10%, #ffffff33, transparent 25%),
+      linear-gradient(135deg, #8b5e3c, #593922);
+  }
+  button, input, select, textarea { font: inherit; }
+  
+  .toolbar {
+    position: sticky; top: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 24px;
+    background: #241910ee; color: #fff;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 5px 20px #0005;
+    flex-wrap: wrap;
+  }
+  .toolbar h1 { margin: 0; font-size: 22px; font-family: 'Caveat', cursive; letter-spacing: 1px; }
+  .toolbar .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  
+  button {
+    border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    background: #fff; color: #33271e; font-weight: 700;
+    transition: transform 0.1s, background 0.1s;
+    box-shadow: 0 2px 5px #0003;
+  }
+  button:hover { transform: translateY(-1px); background: #fdfaf5; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: #f1d37e; color: #382c0e; }
+  button.primary:hover { background: #e8c76b; }
+  button.danger { background: #e8a0a0; color: #401010; }
+
+  .board-wrap { padding: 30px; overflow: auto; }
+  .hint {
+    text-align: center; color: #fdfbf7; margin: 0 0 16px;
+    font-size: 16px; text-shadow: 0 1px 3px #0008;
+  }
+
+  /* Tablero estilo corcho/madera */
+  .board {
+    position: relative;
+    width: 1440px;
+    height: 1100px;
+    margin: auto;
+    background:
+      linear-gradient(#0000000c 1px, transparent 1px),
+      linear-gradient(90deg, #0000000c 1px, transparent 1px),
+      radial-gradient(circle at 50% 50%, #d2a477, #b28254);
+    background-size: 40px 40px, 40px 40px, 100% 100%;
+    border: 16px solid #482f1b;
+    border-radius: 12px;
+    box-shadow: 0 25px 60px #0009, inset 0 0 60px #35201188;
+    overflow: hidden;
+  }
+  .board::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 12% 18%, #fff3 0 2px, transparent 4px),
+      radial-gradient(circle at 85% 72%, #0002 0 3px, transparent 5px);
+    background-size: 80px 65px, 110px 85px;
+    pointer-events: none;
+  }
+
+  /* Tarjetas base */
+  .card {
+    position: absolute;
+    width: 300px;
+    padding: 16px;
+    background: #fffdf9;
+    box-shadow: 0 10px 25px #0004;
+    transform: rotate(var(--r, -1deg));
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+  }
+  .board.editing-mode .card {
+    cursor: grab;
+  }
+  .board.editing-mode .card:hover {
+    transform: rotate(0deg) scale(1.02);
+    z-index: 100;
+    box-shadow: 0 15px 35px #0006;
+  }
+  .card.dragging { cursor: grabbing !important; z-index: 999; opacity: 0.95; }
+
+  /* Cinta adhesiva superior */
+  .tape {
+    position: absolute; top: -10px; left: 50%; width: 90px; height: 22px;
+    transform: translateX(-50%) rotate(-2deg);
+    background: rgba(242, 238, 227, 0.7);
+    box-shadow: 0 1px 3px #0002;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* Diseños de papel y bordes */
+  .card.rip-torn {
+    clip-path: polygon(0% 2%, 3% 0%, 7% 3%, 12% 1%, 17% 4%, 22% 0%, 27% 3%, 33% 1%, 38% 4%, 43% 0%, 48% 3%, 53% 1%, 58% 4%, 63% 0%, 68% 3%, 73% 1%, 78% 4%, 83% 0%, 88% 3%, 93% 1%, 97% 4%, 100% 1%, 100% 98%, 97% 100%, 93% 97%, 88% 99%, 83% 96%, 78% 100%, 73% 97%, 68% 99%, 63% 96%, 58% 100%, 53% 97%, 48% 99%, 43% 96%, 38% 100%, 33% 97%, 28% 99%, 22% 96%, 17% 100%, 12% 97%, 7% 99%, 3% 96%, 0% 99%);
+  }
+  .card.rip-polaroid {
+    padding: 14px 14px 38px 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 20px #0004;
+  }
+  .card.rip-note {
+    background: #fff9e6;
+    border-radius: 2px;
+  }
+  .card.rip-folded {
+    background: #fbf6ec;
+    box-shadow: 3px 3px 10px #0003, inset -10px -10px 20px #0000000a;
+  }
+
+  /* Botones internos de cada tarjeta (solo visibles en modo edición) */
+  .card .card-actions {
+    position: absolute; top: 6px; right: 6px; display: none; gap: 4px; z-index: 10;
+  }
+  .board.editing-mode .card:hover .card-actions { display: flex; }
+  .card-actions button {
+    background: #0006; color: #fff; border-radius: 50%; width: 24px; height: 24px; padding: 0; font-size: 13px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none;
+  }
+  .card-actions button:hover { background: #d9534f; }
+
+  /* Etiquetas de colores */
+  .label {
+    display: inline-block; padding: 4px 12px; margin: 4px 0 10px;
+    font-family: 'Quicksand', sans-serif; font-weight: 700; font-size: 17px;
+    border-radius: 4px; transform: rotate(-1deg);
+  }
+  .pink { background: var(--pink); color: #501d2d; }
+  .blue { background: var(--blue); color: #17384a; }
+  .green { background: var(--green); color: #1d3b19; }
+  .yellow { background: var(--yellow); color: #4a3b0c; }
+
+  /* Contenedor de foto o icono */
+  .photo {
+    height: 130px; margin-bottom: 10px; border-radius: 3px; overflow: hidden;
+    background: #ddd; position: relative; display: flex; align-items: center; justify-content: center; font-size: 44px;
+  }
+  .photo img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* Tipografías y textos */
+  .card h2 { margin: 0 0 8px; font-size: 22px; font-family: 'Caveat', cursive; font-weight: 700; }
+  .card ul { margin: 0; padding-left: 20px; font-size: 17px; line-height: 1.45; }
+  .card li { margin-bottom: 3px; outline: none; }
+  .card p { margin: 0; font-size: 17px; line-height: 1.4; outline: none; }
+
+  /* Título Central Principal (Hero) */
+  .title-hero {
+    position: absolute; left: 500px; top: 225px; transform: translateX(-50%) rotate(-1deg);
+    width: 360px; padding: 24px; text-align: center; background: #fbf3e2;
+    box-shadow: 0 10px 25px #0004; z-index: 10;
+  }
+  .title-hero h2 { font-size: 42px; line-height: 1.1; margin: 5px 0 12px; font-family: 'Caveat', cursive; }
+  .title-hero p { font-size: 18px; line-height: 1.4; }
+
+  /* Ocultar elementos de edición cuando está en modo vista previa */
+  .board:not(.editing-mode) [contenteditable="true"] {
+    user-select: none;
+    pointer-events: none;
+  }
+
+  /* Controles de edición ocultos por defecto en la barra superior */
+  .edit-controls { display: none; gap: 8px; align-items: center; }
+  .board.editing-mode ~ .toolbar .edit-controls,
+  .toolbar.active-editing .edit-controls { display: flex; }
+
+  /* Modal flotante */
+  dialog {
+    width: min(520px, 92vw); border: 0; border-radius: 14px; padding: 0;
+    box-shadow: 0 25px 70px #0008; background: #fffaf2;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  .modal-content { padding: 24px; }
+  .modal-content h2 { margin-top: 0; font-family: 'Caveat', cursive; font-size: 30px; color: #523420; }
+  label { display: block; font-weight: bold; margin: 12px 0 5px; font-size: 15px; }
+  input, textarea, select {
+    width: 100%; padding: 10px; border: 1px solid #d4c4b2; border-radius: 8px; background: #fff; font-size: 15px;
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+  @media (max-width: 1150px) {
+    .board-wrap { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="toolbar" id="mainToolbar">
+  <h1>✨ Mi Mapa de Sueños Interactivo</h1>
+  <div class="actions">
+    <div class="edit-controls">
+      <button class="primary" id="addBtn">＋ Agregar tarjeta</button>
+      <button id="saveBtn">💾 Guardar</button>
+      <button class="danger" id="resetBtn">↺ Reiniciar</button>
+    </div>
+    <button class="primary" id="toggleEditBtn">✎ Editar Tablero</button>
+  </div>
+</header>
+
+<div class="board-wrap">
+  <p class="hint" id="helperHint">Visualizando tu Mapa de Sueños. Haz clic en "Editar Tablero" para modificar posiciones y textos.</p>
+  <main class="board" id="board"></main>
+</div>
+
+<!-- Modal para Crear / Editar tarjetas -->
+<dialog id="cardModal">
+  <form class="modal-content" method="dialog" id="cardForm">
+    <h2 id="modalTitle">✨ Nueva Tarjeta de Sueño</h2>
+    <input type="hidden" id="editCardId">
+    
+    <label for="fTitle">Título de la tarjeta</label>
+    <input id="fTitle" required placeholder="Ej. Nuevos Proyectos">
+
+    <label for="fCategory">Categoría / Etiqueta</label>
+    <input id="fCategory" placeholder="🚀 Metas 2026">
+
+    <label for="fColor">Color de etiqueta</label>
+    <select id="fColor">
+      <option value="pink">Rosa</option>
+      <option value="blue">Azul</option>
+      <option value="green">Verde</option>
+      <option value="yellow">Amarillo</option>
+    </select>
+
+    <label for="fRip">Diseño de papel rasgado / bordes</label>
+    <select id="fRip">
+      <option value="rip-note">Nota clásica (Bordes rectos)</option>
+      <option value="rip-torn">Papel rasgado a mano (Bordes irregulares)</option>
+      <option value="rip-polaroid">Estilo Polaroid (Foto grande con marco)</option>
+      <option value="rip-folded">Papel doblado con textura</option>
+    </select>
+
+    <label for="fImage">Imagen (URL o Emoji / Icono)</label>
+    <input id="fImage" placeholder="https://images.unsplash.com/... o ✈️">
+
+    <label for="fItems">Sueños / Metas (uno por línea)</label>
+    <textarea id="fItems" placeholder="Aprender nueva tecnología&#10;Viajar por el mundo&#10;Crecer profesionalmente"></textarea>
+
+    <div class="modal-actions">
+      <button type="button" id="cancelModal">Cancelar</button>
+      <button type="submit" class="primary" id="saveModalBtn">Guardar tarjeta</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const board = document.getElementById('board');
+const toolbar = document.getElementById('mainToolbar');
+const dialog = document.getElementById('cardModal');
+const form = document.getElementById('cardForm');
+const toggleEditBtn = document.getElementById('toggleEditBtn');
+const helperHint = document.getElementById('helperHint');
+
+const initialCards = [
+  {
+    id: 'fam',
+    title: 'Familia',
+    category: '❤️ Familia',
+    color: 'pink',
+    rip: 'rip-torn',
+    image: 'https://images.unsplash.com/photo-1542382257-80dedb725088?auto=format&fit=crop&w=600&q=80',
+    items: ['Ver crecer a mis hijos', 'Darles lo mejor', 'Una familia unida', 'Viajar juntos', 'Ser un gran ejemplo'],
+    left: '40px', top: '35px', rotate: '-2deg', width: '310px'
+  },
+  {
+    id: 'travel',
+    title: 'Viajes',
+    category: '✈️ Viajes',
+    color: 'blue',
+    rip: 'rip-torn',
+    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
+    items: ['Conocer Japón', 'Viajar por Europa', 'Ver la aurora boreal', 'Conocer nuevas culturas', 'Coleccionar experiencias'],
+    left: '1080px', top: '35px', rotate: '2deg', width: '310px'
+  },
+  {
+    id: 'career',
+    title: 'Carrera Profesional',
+    category: '💻 Carrera Profesional',
+    color: 'blue',
+    rip: 'rip-note',
+    image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=600&q=80',
+    items: ['Seguir creciendo como Dev', 'Ser un gran especialista', 'Libertad de tiempo', 'Trabajo remoto', 'Estabilidad y buenos ingresos'],
+    left: '40px', top: '310px', rotate: '1deg', width: '310px'
+  },
+  {
+    id: 'finance',
+    title: 'Libertad Financiera',
+    category: '💰 Libertad Financiera',
+    color: 'green',
+    rip: 'rip-folded',
+    image: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=600&q=80',
+    items: ['Ahorrar e invertir', 'Comprar mi casa', 'Tener mi moto soñada', 'Un fondo de emergencia', 'Retiro tranquilo'],
+    left: '1080px', top: '320px', rotate: '-2deg', width: '310px'
+  },
+  {
+    id: 'hero',
+    type: 'hero',
+    title: 'Mi Mapa de Sueños',
+    text: 'Grandes sueños\n+\nAcciones diarias\n=\nUna vida increíble',
+    left: '540px', top: '220px', rotate: '-1deg', width: '360px'
+  },
+  {
+    id: 'health',
+    title: 'Salud y Bienestar',
+    category: '💚 Salud y Bienestar',
+    color: 'green',
+    rip: 'rip-polaroid',
+    image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80',
+    items: ['Estar en forma', 'Comer saludable', 'Cuidar mi salud mental', 'Más energía', 'Larga vida'],
+    left: '40px', top: '650px', rotate: '-2deg', width: '310px'
+  },
+  {
+    id: 'home',
+    title: 'Hogar',
+    category: '🏠 Hogar',
+    color: 'blue',
+    rip: 'rip-torn',
+    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80',
+    items: ['Mi casa propia', 'Un espacio para mi familia', 'Comodidad y tranquilidad', 'Un lugar lleno de amor'],
+    left: '380px', top: '630px', rotate: '1deg', width: '310px'
+  },
+  {
+    id: 'growth',
+    title: 'Crecimiento Personal',
+    category: '🌱 Crecimiento Personal',
+    color: 'green',
+    rip: 'rip-note',
+    image: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80',
+    items: ['Mejorar en lo que hago', 'Aprender cosas nuevas', 'Ser una mejor persona', 'Controlar mis emociones', 'Confiar en mí'],
+    left: '1080px', top: '650px', rotate: '2deg', width: '310px'
+  }
+];
+
+let cardsData = [];
+let isEditing = false;
+
+function loadCards() {
+  const saved = localStorage.getItem('interactiveDreamMap_v2');
+  if (saved) {
+    try { cardsData = JSON.parse(saved); } catch(e) { cardsData = initialCards; }
+  } else {
+    cardsData = initialCards;
+  }
+  renderBoard();
+}
+
+function saveCards() {
+  localStorage.setItem('interactiveDreamMap_v2', JSON.stringify(cardsData));
+}
+
+function renderBoard() {
+  board.innerHTML = '';
+  cardsData.forEach(c => {
+    const el = document.createElement('div');
+    el.className = `card ${c.rip || 'rip-note'} ${c.type === 'hero' ? 'title-hero' : ''}`;
+    el.style.left = c.left;
+    el.style.top = c.top;
+    if (c.width) el.style.width = c.width;
+    el.style.setProperty('--r', c.rotate || '0deg');
+    el.dataset.id = c.id;
+
+    if (c.type === 'hero') {
+      el.innerHTML = `
+        <span class="tape"></span>
+        <div style="font-size:32px;">♛</div>
+        <h2 contenteditable="true" onblur="updateCardText('${c.id}', 'title', this.innerHTML)">${c.title}</h2>
+        <p contenteditable="true" onblur="updateCardText('${c.id}', 'text', this.innerHTML)">${c.text.replace(/\n/g, '<br>')}</p>
+      `;
+    } else {
+      let photoContent = '';
+      if (c.image) {
+        photoContent = (c.image.startsWith('http') || c.image.startsWith('data:')) ? `<img src="${c.image}" alt="${c.title}">` : c.image;
+      } else {
+        photoContent = '✨';
+      }
+
+      el.innerHTML = `
+        <span class="tape"></span>
+        <div class="card-actions">
+          <button onclick="openEditModal('${c.id}')" title="Editar diseño y contenido">⚙️</button>
+          <button onclick="deleteCard('${c.id}')" title="Eliminar">×</button>
+        </div>
+        <div class="label ${c.color || 'blue'}" contenteditable="true" onblur="updateCardProp('${c.id}', 'category', this.innerHTML)">${c.category}</div>
+        <div class="photo">${photoContent}</div>
+        <h2 contenteditable="true" onblur="updateCardProp('${c.id}', 'title', this.innerHTML)">${c.title}</h2>
+        <ul>
+          ${(c.items || []).map((item, idx) => `<li contenteditable="true" onblur="updateItemText('${c.id}', ${idx}, this.innerHTML)">${item}</li>`).join('')}
+        </ul>
+      `;
+    }
+
+    makeDraggable(el, c);
+    board.appendChild(el);
+  });
+}
+
+function makeDraggable(el, dataObj) {
+  let startX, startY, startLeft, startTop;
+  el.addEventListener('pointerdown', e => {
+    if (!isEditing) return; // Si no estamos editando, no se puede arrastrar
+    if (e.target.closest('button, [contenteditable="true"], input, select')) return;
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    const boardRect = board.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = elRect.left - boardRect.left;
+    startTop = elRect.top - boardRect.top;
+  });
+
+  el.addEventListener('pointermove', e => {
+    if (!el.classList.contains('dragging')) return;
+    el.style.left = Math.max(0, startLeft + (e.clientX - startX)) + 'px';
+    el.style.top = Math.max(0, startTop + (e.clientY - startY)) + 'px';
+    dataObj.left = el.style.left;
+    dataObj.top = el.style.top;
+  });
+
+  el.addEventListener('pointerup', () => {
+    if (el.classList.contains('dragging')) {
+      el.classList.remove('dragging');
+      saveCards();
+    }
+  });
+}
+
+window.updateCardProp = function(id, prop, val) {
+  if (!isEditing) return;
+  const c = cardsData.find(x => x.id === id);
+  if (c) { c[prop] = val.trim(); saveCards(); }
+}
+
+window.updateCardText = function(id, prop, val) {
+  if (!isEditing) return;
+  const c = cardsData.find(x => x.id === id);
+  if (c) { c[prop] = val.replace(/<div><br><\/div>/g, '\n').replace(/<br>/g, '\n').trim(); saveCards(); }
+}
+
+window.updateItemText = function(id, index, val) {
+  if (!isEditing) return;
+  const c = cardsData.find(x => x.id === id);
+  if (c && c.items) { c.items[index] = val.trim(); saveCards(); }
+}
+
+window.deleteCard = function(id) {
+  if (!isEditing) return;
+  if (confirm('¿Eliminar esta tarjeta?')) {
+    cardsData = cardsData.filter(x => x.id !== id);
+    saveCards();
+    renderBoard();
+  }
+}
+
+const addBtn = document.getElementById('addBtn');
+const cancelModal = document.getElementById('cancelModal');
+
+addBtn.onclick = () => {
+  document.getElementById('modalTitle').textContent = '✨ Nueva Tarjeta de Sueño';
+  document.getElementById('editCardId').value = '';
+  document.getElementById('fTitle').value = '';
+  document.getElementById('fCategory').value = '🌟 Mis Metas';
+  document.getElementById('fColor').value = 'yellow';
+  document.getElementById('fRip').value = 'rip-torn';
+  document.getElementById('fImage').value = '🚀';
+  document.getElementById('fItems').value = 'Meta 1\nMeta 2\nMeta 3';
+  dialog.showModal();
+};
+
+window.openEditModal = function(id) {
+  if (!isEditing) return;
+  const c = cardsData.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('modalTitle').textContent = '⚙️ Editar Tarjeta';
+  document.getElementById('editCardId').value = c.id;
+  document.getElementById('fTitle').value = c.title || '';
+  document.getElementById('fCategory').value = c.category || '';
+  document.getElementById('fColor').value = c.color || 'pink';
+  document.getElementById('fRip').value = c.rip || 'rip-note';
+  document.getElementById('fImage').value = c.image || '';
+  document.getElementById('fItems').value = (c.items || []).join('\n');
+  dialog.showModal();
+};
+
+cancelModal.onclick = () => dialog.close();
+
+form.onsubmit = e => {
+  e.preventDefault();
+  const editId = document.getElementById('editCardId').value;
+  const title = document.getElementById('fTitle').value.trim();
+  const category = document.getElementById('fCategory').value.trim();
+  const color = document.getElementById('fColor').value;
+  const rip = document.getElementById('fRip').value;
+  const image = document.getElementById('fImage').value.trim();
+  const items = document.getElementById('fItems').value.split('\n').map(x => x.trim()).filter(Boolean);
+
+  if (editId) {
+    const c = cardsData.find(x => x.id === editId);
+    if (c) { c.title = title; c.category = category; c.color = color; c.rip = rip; c.image = image; c.items = items; }
+  } else {
+    cardsData.push({
+      id: 'custom-' + Date.now(),
+      title, category, color, rip, image, items,
+      left: (100 + Math.random() * 400) + 'px',
+      top: (150 + Math.random() * 400) + 'px',
+      rotate: ((Math.random() * 6) - 3) + 'deg',
+      width: '310px'
+    });
+  }
+
+  saveCards();
+  renderBoard();
+  dialog.close();
+};
+
+document.getElementById('saveBtn').onclick = () => {
+  saveCards();
+  alert('✅ ¡Cambios guardados con éxito!');
+};
+
+document.getElementById('resetBtn').onclick = () => {
+  if (confirm('¿Restablecer el mapa al diseño original?')) {
+    localStorage.removeItem('interactiveDreamMap_v2');
+    cardsData = initialCards;
+    renderBoard();
+  }
+};
+
+// Alternar entre Vista Previa y Modo Edición
+toggleEditBtn.onclick = () => {
+  isEditing = !isEditing;
+  if (isEditing) {
+    board.classList.add('editing-mode');
+    toolbar.classList.add('active-editing');
+    toggleEditBtn.textContent = '👁️ Ver Vista Previa';
+    toggleEditBtn.className = '';
+    helperHint.textContent = 'Modo Edición activo: Arrastra las tarjetas, haz clic en los textos para modificarlos o usa el botón de engranaje en cada tarjeta.';
+    document.querySelectorAll('.card [contenteditable]').forEach(el => { el.contentEditable = 'true'; });
+  } else {
+    board.classList.remove('editing-mode');
+    toolbar.classList.remove('active-editing');
+    toggleEditBtn.textContent = '✎ Editar Tablero';
+    toggleEditBtn.className = 'primary';
+    helperHint.textContent = 'Visualizando tu Mapa de Sueños. Haz clic en "Editar Tablero" para modificar posiciones y textos.';
+    document.querySelectorAll('.card [contenteditable]').forEach(el => { el.contentEditable = 'false'; });
+  }
+};
+
+loadCards();
+</script>
+</body>
+</html>
